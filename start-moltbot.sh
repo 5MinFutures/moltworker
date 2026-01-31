@@ -187,8 +187,15 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
     config.channels.telegram = config.channels.telegram || {};
     config.channels.telegram.botToken = process.env.TELEGRAM_BOT_TOKEN;
     config.channels.telegram.enabled = true;
-    config.channels.telegram.dm = config.channels.telegram.dm || {};
     config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+    // Removed legacy dm object as it causes crashes
+    if (config.channels.telegram.dm) delete config.channels.telegram.dm;
+    
+    // Ensure webhookUrl is NOT set (force long-polling)
+    if (config.channels.telegram.webhookUrl) {
+        console.log('Removing webhookUrl to force Telegram long-polling');
+        delete config.channels.telegram.webhookUrl;
+    }
 }
 
 // Discord configuration
@@ -261,8 +268,38 @@ if (isOpenAI) {
     config.agents.defaults.models['anthropic/claude-haiku-4-5-20251001'] = { alias: 'Haiku 4.5' };
     config.agents.defaults.model.primary = 'anthropic/claude-opus-4-5-20251101';
 } else {
-    // Default to Anthropic without custom base URL (uses built-in pi-ai catalog)
     config.agents.defaults.model.primary = 'anthropic/claude-opus-4-5';
+}
+
+// Google / Gemini Configuration
+if (process.env.GOOGLE_API_KEY) {
+    console.log('Configuring Google provider');
+    config.models = config.models || {};
+    config.models.providers = config.models.providers || {};
+    
+    config.models.providers.google = {
+        apiKey: process.env.GOOGLE_API_KEY,
+        models: [
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview', contextWindow: 2000000 },
+            { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp', contextWindow: 1000000 },
+            { id: 'gemini-exp-1206', name: 'Gemini Exp 1206', contextWindow: 2000000 }
+        ]
+    };
+
+    // Add models to allowlist
+    config.agents.defaults.models = config.agents.defaults.models || {};
+    config.agents.defaults.models['google/gemini-3-pro-preview'] = { alias: 'Gemini 3 Pro' };
+    config.agents.defaults.models['google/gemini-2.0-flash-exp'] = { alias: 'Gemini Flash' };
+    
+    // Set as primary
+    config.agents.defaults.model.primary = 'google/gemini-3-pro-preview';
+}
+
+// Composio Configuration
+if (process.env.COMPOSIO_API_KEY) {
+    console.log('Configuring Composio');
+    // We export this so the skill script can pick it up
+    // The skill script should look for process.env.COMPOSIO_API_KEY
 }
 
 // Write updated config

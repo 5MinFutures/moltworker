@@ -14,10 +14,16 @@ RUN apt-get update && apt-get install -y xz-utils ca-certificates rsync \
 # Install pnpm globally
 RUN npm install -g pnpm
 
+# Ensure global node modules are required
+ENV NODE_PATH=/usr/local/lib/node_modules
+
 # Install moltbot (CLI is still named clawdbot until upstream renames)
 # Pin to specific version for reproducible builds
 RUN npm install -g clawdbot@2026.1.24-3 \
     && clawdbot --version
+
+# Install Composio SDK for skills
+RUN npm install -g composio-core
 
 # Create moltbot directories (paths still use clawdbot until upstream renames)
 # Templates are stored in /root/.clawdbot-templates for initialization
