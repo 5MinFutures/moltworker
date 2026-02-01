@@ -25,8 +25,10 @@ BACKUP_DIR="/data/moltbot"
 echo "Config directory: $CONFIG_DIR"
 echo "Backup directory: $BACKUP_DIR"
 
-# Create config directory
+# Create config directory and subdirectories expected by clawdbot
 mkdir -p "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR/agents/main/sessions"
+mkdir -p "$CONFIG_DIR/credentials"
 
 # ============================================================
 # RESTORE FROM R2 BACKUP
@@ -182,20 +184,22 @@ if (process.env.CLAWDBOT_DEV_MODE === 'true') {
     config.gateway.controlUi.allowInsecureAuth = true;
 }
 
-// Telegram configuration
+// Correct Telegram configuration for OpenClaw/Clawdbot 2026
 if (process.env.TELEGRAM_BOT_TOKEN) {
-    config.channels.telegram = config.channels.telegram || {};
-    config.channels.telegram.botToken = process.env.TELEGRAM_BOT_TOKEN;
-    config.channels.telegram.enabled = true;
-    config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
-    // Removed legacy dm object as it causes crashes
-    if (config.channels.telegram.dm) delete config.channels.telegram.dm;
-    
-    // Ensure webhookUrl is NOT set (force long-polling)
-    if (config.channels.telegram.webhookUrl) {
-        console.log('Removing webhookUrl to force Telegram long-polling');
-        delete config.channels.telegram.webhookUrl;
-    }
+  config.channels.telegram = config.channels.telegram || {};
+  config.channels.telegram.botToken = process.env.TELEGRAM_BOT_TOKEN;
+  config.channels.telegram.enabled = true;
+  config.channels.telegram.dmPolicy = process.env.TELEGRAM_DM_POLICY || 'pairing';
+  config.channels.telegram.allowFrom = ['*'];
+
+  // Clean up any invalid 'dm' key from previous templates/runs
+  delete config.channels.telegram.dm;
+
+  // Ensure webhookUrl is NOT set (force long-polling)
+  if (config.channels.telegram.webhookUrl) {
+      console.log('Removing webhookUrl to force Telegram long-polling');
+      delete config.channels.telegram.webhookUrl;
+  }
 }
 
 // Discord configuration
@@ -318,6 +322,9 @@ echo "Gateway will be available on port 18789"
 # Clean up stale lock files
 rm -f /tmp/clawdbot-gateway.lock 2>/dev/null || true
 rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
+
+echo "Running clawdbot doctor --fix to migrate config if needed..."
+clawdbot doctor --fix || echo "clawdbot doctor failed, continuing anyway"
 
 BIND_MODE="lan"
 echo "Dev mode: ${CLAWDBOT_DEV_MODE:-false}, Bind mode: $BIND_MODE"
