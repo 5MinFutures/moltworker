@@ -1,4 +1,4 @@
-{
+≈xx{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "moltbot-agent-kg1296",
   "main": "src/index.ts",
@@ -11,7 +11,7 @@
   },
   "vars": {
     "R2_BUCKET_NAME": "moltbot-data",
-    "SANDBOX_SLEEP_AFTER": "10m",
+    "SANDBOX_SLEEP_AFTER": "never",
     "DEV_MODE": "false"
   },
   "account_id": "e029b8aa101d930aea4d829b0f782ca6",
@@ -45,7 +45,7 @@
     {
       "class_name": "Sandbox",
       "image": "./Dockerfile",
-      "instance_type": "standard-1",
+      "instance_type": "standard-4",
       "max_instances": 1
     }
   ],

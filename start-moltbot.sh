@@ -1,5 +1,6 @@
 #!/bin/bash
 # Startup script for Moltbot in Cloudflare Sandbox
+# Version: 2026.02.05-google-gateway-fix
 # This script:
 # 1. Restores config from R2 backup if available
 # 2. Configures moltbot from environment variables
@@ -132,6 +133,11 @@ else
     echo "Using existing config"
 fi
 
+# Run doctor BEFORE our config generation so our env-var-based config
+# always has the final word (doctor can overwrite/strip custom TTS settings)
+echo "Running clawdbot doctor --fix to migrate config if needed..."
+clawdbot doctor --fix || echo "clawdbot doctor failed, continuing anyway"
+
 # ============================================================
 # UPDATE CONFIG FROM ENVIRONMENT VARIABLES
 # ============================================================
@@ -225,8 +231,41 @@ if (process.env.SLACK_BOT_TOKEN && process.env.SLACK_APP_TOKEN) {
 //   https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_id}/openai
 const baseUrl = (process.env.AI_GATEWAY_BASE_URL || process.env.ANTHROPIC_BASE_URL || '').replace(/\/+$/, '');
 const isOpenAI = baseUrl.endsWith('/openai');
+const isGoogleAI = baseUrl.endsWith('/google-ai-studio');
 
-if (isOpenAI) {
+if (isGoogleAI) {
+    // Google AI Studio via Cloudflare AI Gateway
+    console.log('Configuring Google AI Studio provider via AI Gateway:', baseUrl);
+    config.models = config.models || {};
+    config.models.providers = config.models.providers || {};
+
+    const providerConfig = {
+        baseUrl: baseUrl,
+        // Note: No 'api' field needed - clawdbot auto-detects Google AI Studio from baseUrl
+        models: [
+            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview', contextWindow: 2000000 },
+            { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp', contextWindow: 1000000 },
+            { id: 'gemini-exp-1206', name: 'Gemini Exp 1206', contextWindow: 2000000 }
+        ]
+    };
+
+    // Include API key if set (for gateway BYOK auth)
+    if (process.env.GOOGLE_API_KEY) {
+        providerConfig.apiKey = process.env.GOOGLE_API_KEY;
+    }
+
+    config.models.providers.google = providerConfig;
+
+    // Add models to allowlist
+    config.agents.defaults.models = config.agents.defaults.models || {};
+    config.agents.defaults.models['google/gemini-3-pro-preview'] = { alias: 'Gemini 3 Pro' };
+    config.agents.defaults.models['google/gemini-2.0-flash-exp'] = { alias: 'Gemini Flash' };
+    config.agents.defaults.models['google/gemini-exp-1206'] = { alias: 'Gemini Exp' };
+
+    // Set Gemini as primary model
+    config.agents.defaults.model.primary = 'google/gemini-3-pro-preview';
+
+} else if (isOpenAI) {
     // Create custom openai provider config with baseUrl override
     // Omit apiKey so moltbot falls back to OPENAI_API_KEY env var
     console.log('Configuring OpenAI provider with base URL:', baseUrl);
@@ -271,12 +310,11 @@ if (isOpenAI) {
     config.agents.defaults.models['anthropic/claude-sonnet-4-5-20250929'] = { alias: 'Sonnet 4.5' };
     config.agents.defaults.models['anthropic/claude-haiku-4-5-20251001'] = { alias: 'Haiku 4.5' };
     config.agents.defaults.model.primary = 'anthropic/claude-opus-4-5-20251101';
-} else {
-    config.agents.defaults.model.primary = 'anthropic/claude-opus-4-5';
 }
+// NOTE: No default fallback to Anthropic - must explicitly configure a provider
 
-// Google / Gemini Configuration
-if (process.env.GOOGLE_API_KEY) {
+// Google / Gemini direct API (only when NOT using AI Gateway for Google)
+if (process.env.GOOGLE_API_KEY && !isGoogleAI) {
     console.log('Configuring Google provider');
     config.models = config.models || {};
     config.models.providers = config.models.providers || {};
@@ -306,6 +344,42 @@ if (process.env.COMPOSIO_API_KEY) {
     // The skill script should look for process.env.COMPOSIO_API_KEY
 }
 
+// ============================================================
+// TTS CONFIGURATION
+// ============================================================
+console.log('=== TTS Configuration ===');
+const elevenKey = process.env.ELEVENLABS_API_KEY || null;
+const elevenBaseUrl = process.env.ELEVENLABS_BASE_URL || 'https://api.elevenlabs.io';
+const elevenVoice = process.env.ELEVENLABS_VOICE_ID || 'bIHbv24MWmeRgasZH58o'; // Will default
+
+console.log('ELEVENLABS_API_KEY present:', !!elevenKey);
+console.log('[tts-debug] raw ELEVENLABS_API_KEY length:', elevenKey ? elevenKey.length : 0);
+
+if (!config.messages) config.messages = {};
+
+if (elevenKey) {
+  config.messages.tts = {
+    auto: 'always',
+    provider: 'elevenlabs',
+    elevenlabs: {
+      baseUrl: elevenBaseUrl,
+      apiKey: elevenKey,
+      voiceId: elevenVoice,
+      modelId: 'eleven_turbo_v2_5',
+      voiceSettings: { speed: 1 },
+    },
+  };
+} else {
+  config.messages.tts = {
+    auto: 'always',
+    provider: 'edge',
+  };
+}
+
+console.log('TTS PROVIDER:', config.messages.tts.provider);
+console.log('[tts-config-final]', JSON.stringify(config.messages.tts, null, 2));
+console.log('=========================');
+
 // Write updated config
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 console.log('Configuration updated successfully');
@@ -323,8 +397,8 @@ echo "Gateway will be available on port 18789"
 rm -f /tmp/clawdbot-gateway.lock 2>/dev/null || true
 rm -f "$CONFIG_DIR/gateway.lock" 2>/dev/null || true
 
-echo "Running clawdbot doctor --fix to migrate config if needed..."
-clawdbot doctor --fix || echo "clawdbot doctor failed, continuing anyway"
+# Export voice ID for clawdbot (may read from env instead of config)
+export ELEVENLABS_VOICE_ID="${ELEVENLABS_VOICE_ID:-bIHbv24MWmeRgasZH58o}"
 
 BIND_MODE="lan"
 echo "Dev mode: ${CLAWDBOT_DEV_MODE:-false}, Bind mode: $BIND_MODE"

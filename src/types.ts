@@ -14,6 +14,11 @@ export interface MoltbotEnv {
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_BASE_URL?: string;
   OPENAI_API_KEY?: string;
+  GOOGLE_API_KEY?: string;
+  // ElevenLabs TTS configuration
+  ELEVENLABS_API_KEY?: string;      // Direct ElevenLabs API key
+  ELEVENLABS_BASE_URL?: string;     // Custom base URL (for AI Gateway routing)
+  ELEVENLABS_VOICE_ID?: string;     // Voice ID (default: IKne3meq5aSn9XLyUdCD)
   MOLTBOT_GATEWAY_TOKEN?: string; // Gateway token (mapped to CLAWDBOT_GATEWAY_TOKEN for container)
 
   CLAWDBOT_BIND_MODE?: string;
@@ -37,6 +42,8 @@ export interface MoltbotEnv {
   BROWSER?: Fetcher;
   CDP_SECRET?: string; // Shared secret for CDP endpoint authentication
   WORKER_URL?: string; // Public URL of the worker (for CDP endpoint)
+  // Composio integration
+  COMPOSIO_API_KEY?: string; // Composio API key for external tool integrations
 }
 
 /**

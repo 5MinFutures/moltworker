@@ -81,8 +81,11 @@ export async function ensureMoltbotGateway(sandbox: Sandbox, env: MoltbotEnv): P
   const envVars = buildEnvVars(env);
   const command = '/usr/local/bin/start-moltbot.sh';
 
-  console.log('Starting process with command:', command);
-  console.log('Environment vars being passed:', Object.keys(envVars));
+  console.log('[process.ts] starting moltbot with env keys:', Object.keys(envVars));
+  console.log('[process.ts] Key comparison:', {
+    TELEGRAM_BOT_TOKEN: { present: !!envVars.TELEGRAM_BOT_TOKEN, length: envVars.TELEGRAM_BOT_TOKEN?.length || 0 },
+    ELEVENLABS_API_KEY: { present: !!envVars.ELEVENLABS_API_KEY, length: envVars.ELEVENLABS_API_KEY?.length || 0 },
+  });
 
   let process: Process;
   try {
